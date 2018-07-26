@@ -33,15 +33,29 @@ module.exports = class Agent {
     offer(o){
         this.log(`${this.rounds} rounds left`);
         this.rounds--;
+
         if (!o)
         {
-            return this.optimalOrder;
+            let initialOffer = Array.from({length: this.values.length}, (v, i) => 0);
+
+            for (let i in initialOffer) {
+                if(this.values[i]){
+                    initialOffer[i] = this.counts[i];
+                }
+            }
+            this.lastOfferTotal = this.total;
+            this.lastOffer = initialOffer;
+            return initialOffer;
         }
 
         let offerTotal = o.reduce((a,b,index) => a + b * this.values[index], 0);
         this.log(`offer total`);
         this.log(offerTotal);
-        if(offerTotal >= this.optimalOrderTotal) {
+
+        if(
+            offerTotal >= this.optimalOrderTotal
+            && this.optimalOrderTotal > this.total * 0.7
+        ) {
             this.log(`more then optimal`);
             return;
         }
@@ -58,28 +72,34 @@ module.exports = class Agent {
         let needToGet = o.map((count, index) => this.counts[index] - count);
 
         let needToGetOptimal = o.map((count, index) => this.optimalOrder[index] - count);
+        this.log('-----');
+        this.log('to optimal');
+        this.log(needToGetOptimal);
+        this.log('-----');
 
-        let needToGetIncome = needToGet.map((count, index) => count * this.values[index]);
-        let maxToGetIncome = needToGetIncome.reduce(
-            (a,b, index) => {if(a.max < b) {a.max = b; a.id = index}; return a;},
-            {'max': -1, 'id': null}
-        );
+        let needToGetIncome = needToGetOptimal.map((count, index) => count * this.values[index]);
+        this.log('-----');
+        this.log('to optimal income');
+        this.log(needToGetIncome);
+        this.log('-----');
+
+        let possibleToGetIncome = needToGet.map((count, index) => count * this.values[index]);
+        let possibleToGetTotal = this.total - offerTotal;
+
         let totalToGet = needToGetIncome
             .reduce((a,b,index) => a + b, 0);
 
-        let newOffer = Array.from({length: this.values.length}, (v, i) => 0);
-
-        if(maxToGetIncome.max < totalToGet * 0.5) {
-            for(let i in o) {
-                if(i != maxToGetIncome.id) {
-                    newOffer[i] = this.counts[i];
-                } else {
-                    newOffer[i] = o[i];
+        let getPriority = needToGetIncome
+            .map((income, index) => {return {"income": income, "id": index}})
+            .sort(
+                (a, b) => {
+                    let diff = a.income - b.income;
+                    if(diff == 0) {
+                        return this.counts[a.id] - this.counts[b.id];
+                    }
+                    return diff;
                 }
-            }
-            this.log('experiment');
-            return newOffer;
-        }
+            );
 
         let offersDiff = Array.from({length: this.values.length}, (v, i) => 0);
 
@@ -87,69 +107,151 @@ module.exports = class Agent {
             offersDiff = o.map((count, index) => count - this.lastOffer[index]);
         }
 
-        // let newOffer = o.slice();
+        let newOffer = o.slice();
 
-        for(let i = 0; i < this.counts.length; i++) {
-            if(needToGetOptimal[i] > 0 && offersDiff[i] >= 0) {
-                let inc = Math.floor(needToGetOptimal[i] / 2);
-                newOffer[i] = o[i] + (inc == 0 ? 1 : inc);
-            } else if(needToGetOptimal[i] >= 0) {
-                let inc = 1;
-                if(needToGetOptimal[i] > 2) {
-                    inc = Math.floor(needToGetOptimal[i] / 2);
-                } else {
-                    inc = needToGetOptimal[i];
+        let maxItem = getPriority[getPriority.length - 1];
+        let minItem = getPriority[0];
+
+        if(maxItem.income <= possibleToGetTotal * 0.5) {
+            let tmpIncome = 0;
+            let tmpUpdate = Array.from({length: this.values.length}, (v, i) => 0);
+            let updated = false;
+            for (let i = getPriority.length - 2; i >= 0; i--) {
+                let id = getPriority[i].id;
+                if(!this.values[id]){
+                    newOffer[id] = 0;
+                    continue;
                 }
-                newOffer[i] = o[i] + inc;
-            } else if(needToGetOptimal[i] < 0 && offersDiff[i] >= 0) {
-                if(this.values[i] > 0) {
-                    newOffer[i] = o[i];
-                } else {
+                tmpIncome += needToGet[id] * this.values[id];
+                tmpUpdate[id] = needToGet[id];
+                if(needToGet[id]) {
+                    updated = true;
+                }
+            }
+
+            for(let i in newOffer) {
+                newOffer[i] += tmpUpdate[i];
+            }
+
+            if(!updated) {
+                let inc = needToGetOptimal[maxItem.id];
+                if (
+                    maxItem.income < this.optimalOrderTotal * 0.5
+                    && needToGet[maxItem.id] > 2
+                ) {
+                    inc = 1;
+                }
+                newOffer[maxItem.id] += inc;
+            }
+
+            if(tmpIncome >= this.optimalOrderTotal) {
+
+
+                this.lastOfferTotal = offerTotal + tmpIncome;
+                this.lastOffer = newOffer;
+                this.log('----');
+                this.log('all except max');
+                this.log(newOffer);
+                this.log('----');
+                return newOffer;
+            }
+
+
+        } else if(
+            this.total - offerTotal == maxItem.income
+            && offerTotal > this.total * 0.5
+        ) {
+            let inc = 1;
+            if (
+                needToGet[maxItem.id] > 2
+            ) {
+                inc = Math.floor(needToGet[maxItem.id]/ 2);
+            }
+            newOffer[maxItem.id] += inc;
+            for (let i in newOffer) {
+                if (!this.values[i]) {
                     newOffer[i] = 0;
                 }
-            } else {
-                newOffer[i] = o[i] > 0 ? o[i] -1 : 0;
+            }
+            this.log('----');
+            this.log('single item');
+            this.log(newOffer);
+            this.log('----');
+            return newOffer;
+        } else if(maxItem.income + offerTotal >= this.optimalOrderTotal) {
+            let inc = needToGetOptimal[maxItem.id];
+            if (
+                maxItem.income < this.optimalOrderTotal * 0.5
+                && needToGet[maxItem.id] > 2
+            ) {
+                inc = 1;
+            }
+            newOffer[maxItem.id] += inc;
+            for (let i in newOffer) {
+                if (!this.values[i]) {
+                    newOffer[i] = 0;
+                }
+            }
+        } else if(Math.floor(totalToGet * 0.5) == maxItem.income ) {
+            for (let i = getPriority.length - 2; i >= 0; i--) {
+                let id = getPriority[i].id;
+                if(!this.values[id]){
+                    newOffer[i] = 0;
+                    continue;
+                }
+                if(tmpIncome < this.optimalOrderTotal && this.values[i] > 0) {
+                    tmpIncome += needToGetOptimal[id] * this.values[id];
+                    tmpUpdate[id] = needToGetOptimal[id];
+                }
+            }
+
+            for(let i in newOffer) {
+                newOffer[i] += tmpUpdate[i];
+            }
+        } else {
+            newOffer[maxItem.id] += needToGetOptimal[maxItem.id];
+            let tmpIncome = needToGetIncome[maxItem.id];
+            let tmpUpdate = Array.from({length: this.values.length}, (v, i) => 0);
+            for (let i = getPriority.length - 2; i >= 0; i--) {
+                let id = getPriority[i].id;
+                if(!this.values[id]){
+                    newOffer[id] = 0;
+                    continue;
+                }
+                if(tmpIncome < this.optimalOrderTotal && this.values[i] > 0) {
+                    let count = needToGetOptimal[id];
+                    if(count > 1) {
+                        count = 1
+                    }
+                    tmpIncome += count * this.values[id];
+                    tmpUpdate[id] = count;
+                }
+            }
+
+            for(let i in newOffer) {
+                newOffer[i] += tmpUpdate[i];
             }
         }
 
-        let newOfferTotal = newOffer.reduce((a,b,index) => a + b * this.values[index]);
+        let newOfferTotal = newOffer.reduce(
+            (a, b, index) => a + b * this.values[index]
+        );
 
-        //if(this.lastOffer.every((element, index) => element == newOffer[index])) {
-        //    if(this.previousMutation.length == this.values) {
-        //        this.previousMutation = [];
-        //    }
-        //
-        //    let min = Math.floor((this.bestOfferTotal + this.optimalOrderTotal) / 2);
-        //    console.log('min ');
-        //    let mutated = false;
-        //    for(let i in newOffer) {
-        //        if(this.allowMutation(i) && newOffer[i] > 0) {
-        //            if(newOfferTotal - this.values[i] >= min) {
-        //                newOffer[i] -= 1;
-        //                newOfferTotal -= this.values[i];
-        //                this.previousMutation.push(i);
-        //                mutated = true;
-        //                console.log('mutated');
-        //            } else {
-        //                break;
-        //            }
-        //        }
-        //    }
-        //
-        //    if(!mutated) {
-        //        // for(let i in newOffer) {
-        //        //     if(this.maxIncome.id.indexOf(i) < 0  && newOffer[i] > 0) {
-        //        //         i f(this.allowMutation(i) && newOfferTotal - this.values[i] > 0) {
-        //        //             newOffer[i] -= 1;
-        //        //             newOfferTotal -= this.values[i];
-        //        //         } else {
-        //        //             break;
-        //        //         }
-        //        //     }
-        //        // }
-        //        this.previousMutation = [];
-        //    }
-        //}
+        //let newOffer = Array.from({length: this.values.length}, (v, i) => 0);
+
+        //if(maxToGetIncome.max < totalToGet * 0.5) {
+        //     for(let i in o) {
+        //         if(i != maxToGetIncome.id) {
+        //             newOffer[i] = this.counts[i];
+        //         } else {
+        //             newOffer[i] = o[i];
+        //         }
+        //     }
+        //     this.log('experiment');
+        //     return newOffer;
+        // }
+
+
 
         if(
             this.lastOfferTotal && this.lastOfferTotal == newOfferTotal
@@ -160,12 +262,20 @@ module.exports = class Agent {
             return;
         }
 
-        if(!this.rounds && newOfferTotal < this.bestOfferTotal && this.bestOffer != o) {
+        if(
+            !this.rounds
+            && newOfferTotal > this.bestOfferTotal
+            && this.bestOfferTotal > this.total * 0.5
+        ) {
             this.log(`last chance`);
             return this.bestOffer;
         }
         this.lastOfferTotal = newOfferTotal;
         this.lastOffer = newOffer;
+        this.log('---');
+        this.log('offer');
+        this.log(newOffer);
+        this.log('---');
         return newOffer;
     }
 
@@ -215,10 +325,10 @@ module.exports = class Agent {
             }
             this.log('-----------');
             for(let id of valuesGroups[2].indexes) {
-                if(this.values[id] > 0){
-                    o[id] = 1;
-                }
-
+                // if(this.values[id] > 0){
+                //     o[id] = 1;
+                // }
+                o[id] = 0;
             }
         }
         return o;
@@ -274,14 +384,14 @@ module.exports = class Agent {
                     let diff = b.avg - a.avg;
                     if(diff == 0) {
                         let incomeA = a.indexes.reduce(
-                            (a, b) => a + this.values[b] * this.counts[b]
+                            (a1, b1) => a1 + this.values[b1] * this.counts[b1]
                         );
 
                         let incomeB = b.indexes.reduce(
-                            (a, b) => a + this.values[b] * this.counts[b]
+                            (a2, b2) => a2 + this.values[b2] * this.counts[b2]
                         );
 
-                        return incomeB - incomeA;
+                        return incomeA - incomeB;
                     }
                     return diff;
                 });
