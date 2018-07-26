@@ -54,7 +54,7 @@ module.exports = class Agent {
 
         if(
             offerTotal >= this.optimalOrderTotal
-            && this.optimalOrderTotal > this.total * 0.7
+            && this.optimalOrderTotal > this.total * 0.6
         ) {
             this.log(`more then optimal`);
             return;
@@ -101,6 +101,8 @@ module.exports = class Agent {
                 }
             );
 
+        this.log(JSON.stringify(getPriority));
+
         let offersDiff = Array.from({length: this.values.length}, (v, i) => 0);
 
         if(this.lastOffer) {
@@ -109,17 +111,22 @@ module.exports = class Agent {
 
         let newOffer = o.slice();
 
+        for (let i in newOffer) {
+            if (!this.values[i] && newOffer[i]) {
+                newOffer[i]--;
+            }
+        }
+
         let maxItem = getPriority[getPriority.length - 1];
         let minItem = getPriority[0];
 
-        if(maxItem.income <= possibleToGetTotal * 0.5) {
+        if(maxItem.income < this.optimalOrderTotal * 0.5) {
             let tmpIncome = 0;
             let tmpUpdate = Array.from({length: this.values.length}, (v, i) => 0);
             let updated = false;
             for (let i = getPriority.length - 2; i >= 0; i--) {
                 let id = getPriority[i].id;
-                if(!this.values[id]){
-                    newOffer[id] = 0;
+                if(!this.values[id] || !needToGetOptimal[id]){
                     continue;
                 }
                 tmpIncome += needToGet[id] * this.values[id];
@@ -144,7 +151,7 @@ module.exports = class Agent {
                 newOffer[maxItem.id] += inc;
             }
 
-            if(tmpIncome >= this.optimalOrderTotal) {
+            if(tmpIncome+offerTotal >= this.optimalOrderTotal) {
 
 
                 this.lastOfferTotal = offerTotal + tmpIncome;
@@ -165,14 +172,17 @@ module.exports = class Agent {
             if (
                 needToGet[maxItem.id] > 2
             ) {
-                inc = Math.floor(needToGet[maxItem.id]/ 2);
-            }
-            newOffer[maxItem.id] += inc;
-            for (let i in newOffer) {
-                if (!this.values[i]) {
-                    newOffer[i] = 0;
+                inc = Math.floor(needToGet[maxItem.id]/ 2) + 1;
+                if(offersDiff[maxItem.id] < 0) {
+                    inc += offersDiff[maxItem.id];
+                }
+
+                if(!inc) {
+                    inc = 0;
                 }
             }
+            newOffer[maxItem.id] += inc;
+
             this.log('----');
             this.log('single item');
             this.log(newOffer);
@@ -187,38 +197,25 @@ module.exports = class Agent {
                 inc = 1;
             }
             newOffer[maxItem.id] += inc;
-            for (let i in newOffer) {
-                if (!this.values[i]) {
-                    newOffer[i] = 0;
-                }
-            }
-        } else if(Math.floor(totalToGet * 0.5) == maxItem.income ) {
+        } else if(maxItem.income > this.total * 0.5) {
+            newOffer[maxItem.id] += needToGetOptimal[maxItem.id];
             for (let i = getPriority.length - 2; i >= 0; i--) {
                 let id = getPriority[i].id;
                 if(!this.values[id]){
-                    newOffer[i] = 0;
                     continue;
                 }
-                if(tmpIncome < this.optimalOrderTotal && this.values[i] > 0) {
-                    tmpIncome += needToGetOptimal[id] * this.values[id];
-                    tmpUpdate[id] = needToGetOptimal[id];
-                }
-            }
-
-            for(let i in newOffer) {
-                newOffer[i] += tmpUpdate[i];
+                newOffer[id] += Math.floor(needToGet[id] / 2);
             }
         } else {
             newOffer[maxItem.id] += needToGetOptimal[maxItem.id];
-            let tmpIncome = needToGetIncome[maxItem.id];
+            let tmpIncome = offerTotal+needToGetIncome[maxItem.id];
             let tmpUpdate = Array.from({length: this.values.length}, (v, i) => 0);
             for (let i = getPriority.length - 2; i >= 0; i--) {
                 let id = getPriority[i].id;
                 if(!this.values[id]){
-                    newOffer[id] = 0;
                     continue;
                 }
-                if(tmpIncome < this.optimalOrderTotal && this.values[i] > 0) {
+                if(tmpIncome < this.optimalOrderTotal) {
                     let count = needToGetOptimal[id];
                     if(count > 1) {
                         count = 1
@@ -251,6 +248,14 @@ module.exports = class Agent {
         //     return newOffer;
         // }
 
+        if(
+            !this.rounds
+            && newOfferTotal > this.bestOfferTotal
+            && this.bestOfferTotal > this.total * 0.5
+        ) {
+            this.log(`last chance`);
+            return this.bestOffer;
+        }
 
 
         if(
@@ -262,14 +267,6 @@ module.exports = class Agent {
             return;
         }
 
-        if(
-            !this.rounds
-            && newOfferTotal > this.bestOfferTotal
-            && this.bestOfferTotal > this.total * 0.5
-        ) {
-            this.log(`last chance`);
-            return this.bestOffer;
-        }
         this.lastOfferTotal = newOfferTotal;
         this.lastOffer = newOffer;
         this.log('---');
@@ -325,10 +322,10 @@ module.exports = class Agent {
             }
             this.log('-----------');
             for(let id of valuesGroups[2].indexes) {
-                // if(this.values[id] > 0){
-                //     o[id] = 1;
-                // }
-                o[id] = 0;
+                 if(this.values[id] > 0 && this.counts > 1){
+                     o[id] = 1;
+                 }
+                //o[id] = 0;
             }
         }
         return o;
@@ -391,7 +388,7 @@ module.exports = class Agent {
                             (a2, b2) => a2 + this.values[b2] * this.counts[b2]
                         );
 
-                        return incomeA - incomeB;
+                        return incomeB - incomeA;
                     }
                     return diff;
                 });
