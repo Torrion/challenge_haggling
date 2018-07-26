@@ -16,19 +16,7 @@ module.exports = class Agent {
 
         this.bestOffer = null;
         this.bestOfferTotal = 0;
-        this.previousMutation = [];
         this.lastOffer = [];
-        this.maxIncome = this.values.reduce(
-            (a,b, index) => {
-                if(a.max < b) {
-                    a.max = b; a.id = [index]
-                } else if (a.max = b){
-                    a.id.push(index);
-                }
-                return a;
-            },
-            {'max': 0, 'id': []}
-        );
     }
     offer(o){
         this.log(`${this.rounds} rounds left`);
@@ -49,14 +37,14 @@ module.exports = class Agent {
         }
 
         let offerTotal = o.reduce((a,b,index) => a + b * this.values[index], 0);
-        this.log(`offer total`);
-        this.log(offerTotal);
+        //this.log(`offer total`);
+        //this.log(offerTotal);
 
         if(
             offerTotal >= this.optimalOrderTotal
             && this.optimalOrderTotal > this.total * 0.6
         ) {
-            this.log(`more then optimal`);
+            //this.log(`more then optimal`);
             return;
         }
 
@@ -64,7 +52,7 @@ module.exports = class Agent {
             this.bestOfferTotal = offerTotal;
             this.bestOffer = o;
             if(!this.rounds && this.bestOfferTotal >= this.total * 0.6) {
-                this.log(`last chance`);
+                //this.log(`last chance`);
                 return;
             }
         }
@@ -72,22 +60,16 @@ module.exports = class Agent {
         let needToGet = o.map((count, index) => this.counts[index] - count);
 
         let needToGetOptimal = o.map((count, index) => this.optimalOrder[index] - count);
-        this.log('-----');
-        this.log('to optimal');
-        this.log(needToGetOptimal);
-        this.log('-----');
+        //this.log('-----');
+        //this.log('to optimal');
+        //this.log(needToGetOptimal);
+        //this.log('-----');
 
         let needToGetIncome = needToGetOptimal.map((count, index) => count * this.values[index]);
-        this.log('-----');
-        this.log('to optimal income');
-        this.log(needToGetIncome);
-        this.log('-----');
-
-        let possibleToGetIncome = needToGet.map((count, index) => count * this.values[index]);
-        let possibleToGetTotal = this.total - offerTotal;
-
-        let totalToGet = needToGetIncome
-            .reduce((a,b,index) => a + b, 0);
+        //this.log('-----');
+        //this.log('to optimal income');
+        //this.log(needToGetIncome);
+        //this.log('-----');
 
         let getPriority = needToGetIncome
             .map((income, index) => {return {"income": income, "id": index}})
@@ -118,7 +100,6 @@ module.exports = class Agent {
         }
 
         let maxItem = getPriority[getPriority.length - 1];
-        let minItem = getPriority[0];
 
         if(maxItem.income < this.optimalOrderTotal * 0.5) {
             let tmpIncome = 0;
@@ -152,14 +133,12 @@ module.exports = class Agent {
             }
 
             if(tmpIncome+offerTotal >= this.optimalOrderTotal) {
-
-
-                this.lastOfferTotal = offerTotal + tmpIncome;
-                this.lastOffer = newOffer;
-                this.log('----');
-                this.log('all except max');
-                this.log(newOffer);
-                this.log('----');
+                //this.lastOfferTotal = offerTotal + tmpIncome;
+                //this.lastOffer = newOffer;
+                //this.log('----');
+                //this.log('all except max');
+                //this.log(newOffer);
+                //this.log('----');
                 return newOffer;
             }
 
@@ -183,10 +162,10 @@ module.exports = class Agent {
             }
             newOffer[maxItem.id] += inc;
 
-            this.log('----');
-            this.log('single item');
-            this.log(newOffer);
-            this.log('----');
+            //this.log('----');
+            //this.log('single item');
+            //this.log(newOffer);
+            //this.log('----');
             return newOffer;
         } else if(maxItem.income + offerTotal >= this.optimalOrderTotal) {
             let inc = needToGetOptimal[maxItem.id];
@@ -234,57 +213,34 @@ module.exports = class Agent {
             (a, b, index) => a + b * this.values[index]
         );
 
-        //let newOffer = Array.from({length: this.values.length}, (v, i) => 0);
-
-        //if(maxToGetIncome.max < totalToGet * 0.5) {
-        //     for(let i in o) {
-        //         if(i != maxToGetIncome.id) {
-        //             newOffer[i] = this.counts[i];
-        //         } else {
-        //             newOffer[i] = o[i];
-        //         }
-        //     }
-        //     this.log('experiment');
-        //     return newOffer;
-        // }
-
         if(
             !this.rounds
             && newOfferTotal > this.bestOfferTotal
             && this.bestOfferTotal > this.total * 0.5
         ) {
-            this.log(`last chance`);
+            //this.log(`last chance`);
             return this.bestOffer;
         }
 
 
         if(
             this.lastOfferTotal && this.lastOfferTotal == newOfferTotal
-            && offerTotal >= this.total *0.6
             && this.rounds < 2
         ) {
-            this.log(`my new order the same as previous`);
-            return;
+            //this.log(`my new order the same as previous`);
+            if(offerTotal >= this.total *0.6) {
+                return;
+            }
+            return this.optimalOrder;
         }
 
         this.lastOfferTotal = newOfferTotal;
         this.lastOffer = newOffer;
-        this.log('---');
-        this.log('offer');
-        this.log(newOffer);
-        this.log('---');
+        //this.log('---');
+        //this.log('offer');
+        //this.log(newOffer);
+        //this.log('---');
         return newOffer;
-    }
-
-    allowMutation(i) {
-        if(this.maxIncome.id.length == 1) {
-            if(this.maxIncome.id[0] == i) {
-                return false;
-            }
-            return this.previousMutation.indexOf(i) < 0;
-        }
-
-        return this.previousMutation.indexOf(i) < 0;
     }
 
     calculateOptimalOrder(){
@@ -300,18 +256,18 @@ module.exports = class Agent {
                 o[0] = 1;
             }
         } else {
-            let valuesGroups = this.k_means(this.values, 3, this.log);
-            this.log(JSON.stringify(valuesGroups));
+            let valuesGroups = this.k_means(this.values, 3);
+            //this.log(JSON.stringify(valuesGroups));
             //this.log([valuesGroups[0].indexes,valuesGroups[1].indexes,valuesGroups[2].indexes,]);
-            this.log(this.values);
-            this.log(this.counts);
-            this.log('-----------');
-            this.log(valuesGroups[0].indexes);
+            //this.log(this.values);
+            //this.log(this.counts);
+            //this.log('-----------');
+            //this.log(valuesGroups[0].indexes);
             for(let id of (valuesGroups[0].indexes)) {
                 o[id] = this.counts[id];
             }
-            this.log('-----------');
-            this.log(valuesGroups[1].indexes);
+            //this.log('-----------');
+            //this.log(valuesGroups[1].indexes);
             for(let id of valuesGroups[1].indexes) {
                 if(this.values[id] > 0) {
                     o[id] = 1;
@@ -320,7 +276,7 @@ module.exports = class Agent {
                     }
                 }
             }
-            this.log('-----------');
+            //this.log('-----------');
             for(let id of valuesGroups[2].indexes) {
                  if(this.values[id] > 0 && this.counts > 1){
                      o[id] = 1;
@@ -331,7 +287,7 @@ module.exports = class Agent {
         return o;
     }
 
-    k_means(x, n, log) {
+    k_means(x, n) {
         let vals = [];
 
         for(let i = 0; i < x.length; i++) {
