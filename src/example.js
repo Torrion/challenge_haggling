@@ -42,8 +42,6 @@ module.exports = class Agent {
         this.log(`offer total`);
         this.log(offerTotal);
         if(offerTotal >= this.optimalOrderTotal) {
-            this.log(`optomal total`);
-            this.log(this.optimalOrderTotal);
             this.log(`more then optimal`);
             return;
         }
@@ -61,7 +59,27 @@ module.exports = class Agent {
 
         let needToGetOptimal = o.map((count, index) => this.optimalOrder[index] - count);
 
-        let needToGetIncome = needToGetOptimal.map((count, index) => count * this.values[index]);
+        let needToGetIncome = needToGet.map((count, index) => count * this.values[index]);
+        let maxToGetIncome = needToGetIncome.reduce(
+            (a,b, index) => {if(a.max < b) {a.max = b; a.id = index}; return a;},
+            {'max': -1, 'id': null}
+        );
+        let totalToGet = needToGetIncome
+            .reduce((a,b,index) => a + b, 0);
+
+        let newOffer = Array.from({length: this.values.length}, (v, i) => 0);
+
+        if(maxToGetIncome.max < totalToGet * 0.5) {
+            for(let i in o) {
+                if(i != maxToGetIncome.id) {
+                    newOffer[i] = this.counts[i];
+                } else {
+                    newOffer[i] = o[i];
+                }
+            }
+            this.log('experiment');
+            return newOffer;
+        }
 
         let offersDiff = Array.from({length: this.values.length}, (v, i) => 0);
 
@@ -69,19 +87,13 @@ module.exports = class Agent {
             offersDiff = o.map((count, index) => count - this.lastOffer[index]);
         }
 
-
-
-
         // let newOffer = o.slice();
-        let newOffer = Array.from({length: this.values.length}, (v, i) => 0);
+
         for(let i = 0; i < this.counts.length; i++) {
             if(needToGetOptimal[i] > 0 && offersDiff[i] >= 0) {
-                if(this.optimalOrder[i] >= o[i]) {
-                    newOffer[i] = this.optimalOrder[i];
-                } else {
-                    newOffer[i] = o[i];
-                }
-            } else if(needToGetOptimal[i] > 0) {
+                let inc = Math.floor(needToGetOptimal[i] / 2);
+                newOffer[i] = o[i] + (inc == 0 ? 1 : inc);
+            } else if(needToGetOptimal[i] >= 0) {
                 let inc = 1;
                 if(needToGetOptimal[i] > 2) {
                     inc = Math.floor(needToGetOptimal[i] / 2);
@@ -95,8 +107,6 @@ module.exports = class Agent {
                 } else {
                     newOffer[i] = 0;
                 }
-            } else if(!needToGetOptimal[i]) {
-                newOffer[i] = o[i];
             } else {
                 newOffer[i] = o[i] > 0 ? o[i] -1 : 0;
             }
@@ -104,44 +114,42 @@ module.exports = class Agent {
 
         let newOfferTotal = newOffer.reduce((a,b,index) => a + b * this.values[index]);
 
-        if(this.lastOffer.every((element, index) => element == newOffer[index])) {
-
-
-            if(this.previousMutation.length == this.values) {
-                this.previousMutation = [];
-            }
-
-            let min = Math.floor((this.bestOfferTotal + this.optimalOrderTotal) / 2);
-            console.log('min ');
-            let mutated = false;
-            for(let i in newOffer) {
-                if(this.allowMutation(i) && newOffer[i] > 0) {
-                    if(newOfferTotal - this.values[i] >= min) {
-                        newOffer[i] -= 1;
-                        newOfferTotal -= this.values[i];
-                        this.previousMutation.push(i);
-                        mutated = true;
-                        console.log('mutated');
-                    } else {
-                        break;
-                    }
-                }
-            }
-
-            if(!mutated) {
-                // for(let i in newOffer) {
-                //     if(this.maxIncome.id.indexOf(i) < 0  && newOffer[i] > 0) {
-                //         if(this.allowMutation(i) && newOfferTotal - this.values[i] > 0) {
-                //             newOffer[i] -= 1;
-                //             newOfferTotal -= this.values[i];
-                //         } else {
-                //             break;
-                //         }
-                //     }
-                // }
-                this.previousMutation = [];
-            }
-        }
+        //if(this.lastOffer.every((element, index) => element == newOffer[index])) {
+        //    if(this.previousMutation.length == this.values) {
+        //        this.previousMutation = [];
+        //    }
+        //
+        //    let min = Math.floor((this.bestOfferTotal + this.optimalOrderTotal) / 2);
+        //    console.log('min ');
+        //    let mutated = false;
+        //    for(let i in newOffer) {
+        //        if(this.allowMutation(i) && newOffer[i] > 0) {
+        //            if(newOfferTotal - this.values[i] >= min) {
+        //                newOffer[i] -= 1;
+        //                newOfferTotal -= this.values[i];
+        //                this.previousMutation.push(i);
+        //                mutated = true;
+        //                console.log('mutated');
+        //            } else {
+        //                break;
+        //            }
+        //        }
+        //    }
+        //
+        //    if(!mutated) {
+        //        // for(let i in newOffer) {
+        //        //     if(this.maxIncome.id.indexOf(i) < 0  && newOffer[i] > 0) {
+        //        //         i f(this.allowMutation(i) && newOfferTotal - this.values[i] > 0) {
+        //        //             newOffer[i] -= 1;
+        //        //             newOfferTotal -= this.values[i];
+        //        //         } else {
+        //        //             break;
+        //        //         }
+        //        //     }
+        //        // }
+        //        this.previousMutation = [];
+        //    }
+        //}
 
         if(
             this.lastOfferTotal && this.lastOfferTotal == newOfferTotal
